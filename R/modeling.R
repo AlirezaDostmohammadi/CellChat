@@ -202,6 +202,12 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   }
 
   Prob <- array(0, dim = c(numCluster,numCluster,nLR))
+  Prob.LR <- array(0, dim = c(numCluster,numCluster,nLR))
+  Prob.agonist <- array(0, dim = c(numCluster,numCluster,nLR))
+  Prob.antagonist <- array(0, dim = c(numCluster,numCluster,nLR))
+  weight.co.A.receptor <- array(0, dim = c(numCluster,numCluster,nLR))
+  weight.co.I.receptor <- array(0, dim = c(numCluster,numCluster,nLR))
+  Prob.spatial <- array(0, dim = c(numCluster,numCluster,nLR))
   Pval <- array(0, dim = c(numCluster,numCluster,nLR))
 
   set.seed(seed.use)
@@ -223,9 +229,16 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
     dataLR <- Matrix::crossprod(matrix(dataLavg[i,], nrow = 1), matrix(dataRavg[i,], nrow = 1))
     P1 <- dataLR^n/(Kh^n + dataLR^n)
     P1_Pspatial <- P1*P.spatial
+	
+	Prob.LR[ , , i] <- P1
+	weight.co.A.receptor[ , , i] <- matrix(dataRavg.co.A.receptor[i,], nrow = 1)
+	weight.co.I.receptor[ , , i] <- matrix(dataRavg.co.I.receptor[i,], nrow = 1)
+	Prob.spatial[ , , i] <- P.spatial
+	  
     if (sum(P1_Pspatial) == 0) {
       Pnull = P1_Pspatial
       Prob[ , , i] <- Pnull
+	  
       p = 1
       Pval[, , i] <- matrix(p, nrow = numCluster, ncol = numCluster, byrow = FALSE)
     } else {
@@ -255,6 +268,9 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
       # Pnull = P1*P2*P3*P4
       Pnull = P1*P2*P3*P4*P.spatial
       Prob[ , , i] <- Pnull
+	  Prob.agonist[ , , i] <- P2
+	  Prob.antagonist[ , , i] <- P3
+	  Prob.spatial[ , , i] <- P.spatial
 
       Pnull <- as.vector(Pnull)
 
@@ -311,7 +327,16 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   Pval[Prob == 0] <- 1
   dimnames(Prob) <- list(levels(group), levels(group), rownames(pairLRsig))
   dimnames(Pval) <- dimnames(Prob)
-  net <- list("prob" = Prob, "pval" = Pval)
+  dimnames(Prob.LR) <- dimnames(Prob)
+  dimnames(Prob.agonist) <- dimnames(Prob)
+  dimnames(Prob.antagonist) <- dimnames(Prob)
+  dimnames(weight.co.A.receptor) <- dimnames(Prob)
+  dimnames(weight.co.I.receptor) <- dimnames(Prob)
+  dimnames(Prob.spatial) <- dimnames(Prob)
+  
+  net <- list("prob" = Prob, "pval" = Pval, "probLR" = Prob.LR, "probAgonist" = Prob.agonist, 
+			  "probAntagonist" = Prob.antagonist, "weightCoA" = weight.co.A.receptor,
+			  "weightCoI" = weight.co.I.receptor, "probSpatial" = Prob.spatial)
   execution.time = Sys.time() - ptm
   object@options$run.time <- as.numeric(execution.time, units = "secs")
 
