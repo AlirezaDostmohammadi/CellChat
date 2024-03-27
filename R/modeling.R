@@ -246,8 +246,8 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
     P1_Pspatial <- P1*P.spatial
 	
 	Prob.LR[ , , i] <- P1
-	Prob.LR.Without.co.A[ , , i] <- P1.co.A
-	Prob.LR.Without.co.I[ , , i] <- P1.co.I
+	Prob.LR.Without.co.A[ , , i] <- P1.Without.co.A
+	Prob.LR.Without.co.I[ , , i] <- P1.Without.co.I
 	Prob.LR.Without.co.A.co.I[ , , i] <- P1.Without.co.A.co.I
 	
 	weight.co.A.receptor[ , , i] <- matrix(dataRavg.co.A.receptor[i,], nrow = 1)
