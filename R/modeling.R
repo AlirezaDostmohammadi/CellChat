@@ -122,6 +122,9 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   dataRavg.co.A.receptor <- computeExpr_coreceptor(cofactor_input, data.use.avg, pairLRsig, type = "A")
   dataRavg.co.I.receptor <- computeExpr_coreceptor(cofactor_input, data.use.avg, pairLRsig, type = "I")
   dataRavg <- dataRavg * dataRavg.co.A.receptor/dataRavg.co.I.receptor
+  dataRavg.Without.co.A <- dataRavg /dataRavg.co.I.receptor
+  dataRavg.Without.co.I <- dataRavg * dataRavg.co.A.receptor
+  dataRavg.Without.co.A.co.I <- dataRavg
 
   dataLavg2 <- t(replicate(nrow(dataLavg), as.numeric(table(group))/nC))
   dataRavg2 <- dataLavg2
@@ -203,6 +206,10 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
 
   Prob <- array(0, dim = c(numCluster,numCluster,nLR))
   Prob.LR <- array(0, dim = c(numCluster,numCluster,nLR))
+  Prob.LR.Without.co.A <- array(0, dim = c(numCluster,numCluster,nLR))
+  Prob.LR.Without.co.I <- array(0, dim = c(numCluster,numCluster,nLR))
+  Prob.LR.Without.co.A.co.I <- array(0, dim = c(numCluster,numCluster,nLR))
+	
   Prob.agonist <- array(0, dim = c(numCluster,numCluster,nLR))
   Prob.antagonist <- array(0, dim = c(numCluster,numCluster,nLR))
   weight.co.A.receptor <- array(0, dim = c(numCluster,numCluster,nLR))
@@ -227,10 +234,22 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   for (i in 1:nLR) {
     # ligand/receptor
     dataLR <- Matrix::crossprod(matrix(dataLavg[i,], nrow = 1), matrix(dataRavg[i,], nrow = 1))
+	dataLR.Without.co.A <- Matrix::crossprod(matrix(dataLavg[i,], nrow = 1), matrix(dataRavg.Without.co.A[i,], nrow = 1))
+	dataLR.Without.co.I <- Matrix::crossprod(matrix(dataLavg[i,], nrow = 1), matrix(dataRavg.Without.co.I[i,], nrow = 1))
+	dataLR.Without.co.A.co.I <- Matrix::crossprod(matrix(dataLavg[i,], nrow = 1), matrix(dataRavg.Without.co.A.co.I[i,], nrow = 1))
+	
     P1 <- dataLR^n/(Kh^n + dataLR^n)
+	P1.Without.co.A <- dataLR.Without.co.A^n/(Kh^n + dataLR.Without.co.A^n)
+	P1.Without.co.I <- dataLR.Without.co.I^n/(Kh^n + dataLR.Without.co.I^n)
+	P1.Without.co.A.co.I <- dataLR.Without.co.A.co.I^n/(Kh^n + dataLR.Without.co.A.co.I^n)
+	
     P1_Pspatial <- P1*P.spatial
 	
 	Prob.LR[ , , i] <- P1
+	Prob.LR.Without.co.A[ , , i] <- P1.co.A
+	Prob.LR.Without.co.I[ , , i] <- P1.co.I
+	Prob.LR.Without.co.A.co.I[ , , i] <- P1.Without.co.A.co.I
+	
 	weight.co.A.receptor[ , , i] <- matrix(dataRavg.co.A.receptor[i,], nrow = 1)
 	weight.co.I.receptor[ , , i] <- matrix(dataRavg.co.I.receptor[i,], nrow = 1)
 	Prob.spatial[ , , i] <- P.spatial
@@ -334,8 +353,9 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   dimnames(weight.co.I.receptor) <- dimnames(Prob)
   dimnames(Prob.spatial) <- dimnames(Prob)
   
-  net <- list("prob" = Prob, "pval" = Pval, "probLR" = Prob.LR, "probAgonist" = Prob.agonist, 
-			  "probAntagonist" = Prob.antagonist, "weightCoA" = weight.co.A.receptor,
+  net <- list("prob" = Prob, "pval" = Pval, "probLR" = Prob.LR, "probLR.Without.co.A" = P1.Without.co.A, 
+			  "probLR.Without.co.I" = P1.Without.co.I, "probLR.Without.co.A.co.I" =  P1.Without.co.A.co.I,
+			  "probAgonist" = Prob.agonist, "probAntagonist" = Prob.antagonist, "weightCoA" = weight.co.A.receptor,
 			  "weightCoI" = weight.co.I.receptor, "probSpatial" = Prob.spatial)
   execution.time = Sys.time() - ptm
   object@options$run.time <- as.numeric(execution.time, units = "secs")
