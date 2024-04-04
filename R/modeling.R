@@ -209,9 +209,13 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   Prob.LR.Without.co.A <- array(0, dim = c(numCluster,numCluster,nLR))
   Prob.LR.Without.co.I <- array(0, dim = c(numCluster,numCluster,nLR))
   Prob.LR.Without.co.A.co.I <- array(0, dim = c(numCluster,numCluster,nLR))
+  
+  weight.ligand <- array(0, dim = c(numCluster,numCluster,nLR))
+  weight.receptor <- array(0, dim = c(numCluster,numCluster,nLR))
 	
   Prob.agonist <- array(0, dim = c(numCluster,numCluster,nLR))
   Prob.antagonist <- array(0, dim = c(numCluster,numCluster,nLR))
+  
   weight.co.A.receptor <- array(0, dim = c(numCluster,numCluster,nLR))
   weight.co.I.receptor <- array(0, dim = c(numCluster,numCluster,nLR))
   Prob.spatial <- array(0, dim = c(numCluster,numCluster,nLR))
@@ -245,6 +249,10 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
 	
     P1_Pspatial <- P1*P.spatial
 	
+	
+	weight.ligand[ , , i] <- matrix(dataLavg[i,], nrow = 1)
+	weight.receptor[ , , i] <- matrix(dataRavg.Without.co.A.co.I[i,], nrow = 1)
+  
 	Prob.LR[ , , i] <- P1
 	Prob.LR.Without.co.A[ , , i] <- P1.Without.co.A
 	Prob.LR.Without.co.I[ , , i] <- P1.Without.co.I
