@@ -354,17 +354,26 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   Pval[Prob == 0] <- 1
   dimnames(Prob) <- list(levels(group), levels(group), rownames(pairLRsig))
   dimnames(Pval) <- dimnames(Prob)
+  dimnames(weight.ligand) <- dimnames(Prob)
+  dimnames(weight.receptor) <- dimnames(Prob)
   dimnames(Prob.LR) <- dimnames(Prob)
+  
+  dimnames(probLR.Without.co.A) <- dimnames(Prob)
+  dimnames(probLR.Without.co.I) <- dimnames(Prob)
+  dimnames(probLR.Without.co.A.co.I) <- dimnames(Prob)
+  
   dimnames(Prob.agonist) <- dimnames(Prob)
   dimnames(Prob.antagonist) <- dimnames(Prob)
   dimnames(weight.co.A.receptor) <- dimnames(Prob)
   dimnames(weight.co.I.receptor) <- dimnames(Prob)
   dimnames(Prob.spatial) <- dimnames(Prob)
   
-  net <- list("prob" = Prob, "pval" = Pval, "probLR" = Prob.LR, "probLR.Without.co.A" = P1.Without.co.A, 
-			  "probLR.Without.co.I" = P1.Without.co.I, "probLR.Without.co.A.co.I" =  P1.Without.co.A.co.I,
-			  "probAgonist" = Prob.agonist, "probAntagonist" = Prob.antagonist, "weightCoA" = weight.co.A.receptor,
-			  "weightCoI" = weight.co.I.receptor, "probSpatial" = Prob.spatial)
+  net <- list("prob" = Prob, "pval" = Pval, "weight.ligand" = weight.ligand, "weight.receptor" = weight.receptor, 
+			  "probLR" = Prob.LR, "probLR.Without.co.A" = P1.Without.co.A, "probLR.Without.co.I" = P1.Without.co.I,
+			  "probLR.Without.co.A.co.I" =  P1.Without.co.A.co.I, "probAgonist" = Prob.agonist, 
+			  "probAntagonist" = Prob.antagonist, "weightCoA" = weight.co.A.receptor, "weightCoI" = weight.co.I.receptor,
+			  "probSpatial" = Prob.spatial)
+			  
   execution.time = Sys.time() - ptm
   object@options$run.time <- as.numeric(execution.time, units = "secs")
 
