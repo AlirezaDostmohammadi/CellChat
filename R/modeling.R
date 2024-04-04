@@ -358,9 +358,9 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   dimnames(weight.receptor) <- dimnames(Prob)
   dimnames(Prob.LR) <- dimnames(Prob)
   
-  dimnames(probLR.Without.co.A) <- dimnames(Prob)
-  dimnames(probLR.Without.co.I) <- dimnames(Prob)
-  dimnames(probLR.Without.co.A.co.I) <- dimnames(Prob)
+  dimnames(Prob.LR.Without.co.A) <- dimnames(Prob)
+  dimnames(Prob.LR.Without.co.I) <- dimnames(Prob)
+  dimnames(Prob.LR.Without.co.A.co.I) <- dimnames(Prob)
   
   dimnames(Prob.agonist) <- dimnames(Prob)
   dimnames(Prob.antagonist) <- dimnames(Prob)
@@ -369,8 +369,8 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   dimnames(Prob.spatial) <- dimnames(Prob)
   
   net <- list("prob" = Prob, "pval" = Pval, "weight.ligand" = weight.ligand, "weight.receptor" = weight.receptor, 
-			  "probLR" = Prob.LR, "probLR.Without.co.A" = P1.Without.co.A, "probLR.Without.co.I" = P1.Without.co.I,
-			  "probLR.Without.co.A.co.I" =  P1.Without.co.A.co.I, "probAgonist" = Prob.agonist, 
+			  "probLR" = Prob.LR, "probLR.Without.co.A" = Prob.LR.Without.co.A, "probLR.Without.co.I" = Prob.LR.Without.co.I,
+			  "probLR.Without.co.A.co.I" =  Prob.LR.Without.co.A.co.I, "probAgonist" = Prob.agonist, 
 			  "probAntagonist" = Prob.antagonist, "weightCoA" = weight.co.A.receptor, "weightCoI" = weight.co.I.receptor,
 			  "probSpatial" = Prob.spatial)
 			  
