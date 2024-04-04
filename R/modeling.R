@@ -118,13 +118,14 @@ computeCommunProb <- function(object, type = c("triMean", "truncatedMean","thres
   # compute the expression of ligand or receptor
   dataLavg <- computeExpr_LR(geneL, data.use.avg, complex_input)
   dataRavg <- computeExpr_LR(geneR, data.use.avg, complex_input)
+  dataRavg.raw <- dataRavg
   # take account into the effect of co-activation and co-inhibition receptors
   dataRavg.co.A.receptor <- computeExpr_coreceptor(cofactor_input, data.use.avg, pairLRsig, type = "A")
   dataRavg.co.I.receptor <- computeExpr_coreceptor(cofactor_input, data.use.avg, pairLRsig, type = "I")
   dataRavg <- dataRavg * dataRavg.co.A.receptor/dataRavg.co.I.receptor
-  dataRavg.Without.co.A <- dataRavg /dataRavg.co.I.receptor
-  dataRavg.Without.co.I <- dataRavg * dataRavg.co.A.receptor
-  dataRavg.Without.co.A.co.I <- dataRavg
+  dataRavg.Without.co.A <- dataRavg.raw /dataRavg.co.I.receptor
+  dataRavg.Without.co.I <- dataRavg.raw * dataRavg.co.A.receptor
+  dataRavg.Without.co.A.co.I <- dataRavg.raw
 
   dataLavg2 <- t(replicate(nrow(dataLavg), as.numeric(table(group))/nC))
   dataRavg2 <- dataLavg2
