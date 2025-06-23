@@ -2,16 +2,20 @@
 #'
 #' @param data.raw input raw data
 #' @param scale.factor the scaling factor used for each cell
-#' @param do.log whether do log transformation with pseudocount 1
+#' @param do.log whether to do log transformation with pseudocount 1
+#' @param do.sparse whether to use sparse format
 #' @export
 #'
-normalizeData <- function(data.raw, scale.factor = 10000, do.log = TRUE) {
+normalizeData <- function(data.raw, scale.factor = 10000, do.log = TRUE, do.sparse = TRUE) {
   # Scale counts within a sample
   library.size <- Matrix::colSums(data.raw)
   #scale.factor <- median(library.size)
   expr <- Matrix::t(Matrix::t(data.raw) / library.size) * scale.factor
   if (do.log) {
     data.norm <-log1p(expr)
+  }
+  if (do.sparse) {
+    data.input <- as(data.norm, "dgCMatrix")
   }
   return(data.norm)
 }
@@ -810,36 +814,43 @@ identifyOverExpressedInteractions <- function(object, features.name = "features"
 }
 
 
-#' Project gene expression data onto a protein-protein interaction network
+#' Smooth the gene expression data
 #'
 #' A diffusion process is used to smooth genes’ expression values based on their neighbors’ defined in a high-confidence experimentally validated protein-protein network.
 #'
 #' This function is useful when analyzing single-cell data with shallow sequencing depth because the projection reduces the dropout effects of signaling genes, in particular for possible zero expression of subunits of ligands/receptors
 #'
 #' @param object  CellChat object
-#' @param adjMatrix adjacency matrix of protein-protein interaction network to use
+#' @param method When method = "netSmooth", smoothing a gene’s expression values based on its neighbors defined in a high-confidence experimentally validated protein-protein network.
+#' @param adj adjacency matrix of protein-protein interaction network to use
 #' @param alpha numeric in [0,1] alpha = 0: no smoothing; a larger value alpha results in increasing levels of smoothing.
 #' @param normalizeAdjMatrix    how to normalize the adjacency matrix
 #'                              possible values are 'rows' (in-degree)
 #'                              and 'columns' (out-degree)
-#' @return a projected gene expression matrix
+#' @return a smoothed gene expression matrix
 #' @export
 #'
 # This function is adapted from https://github.com/BIMSBbioinfo/netSmooth
-projectData <- function(object, adjMatrix, alpha=0.5, normalizeAdjMatrix=c('rows','columns')){
+smoothData <- function(object, method = c("netSmooth"), adj = NULL, alpha=0.5, normalizeAdjMatrix=c('rows','columns')){
+  if ("data.smooth" %in% methods::slotNames(object) == FALSE) {
+    stop("`object@data.smooth` is missing. Please update the CellChat object via `updateCellChat`! \n")
+  }
   data <- as.matrix(object@data.signaling)
   normalizeAdjMatrix <- match.arg(normalizeAdjMatrix)
-  stopifnot(is(adjMatrix, 'matrix') || is(adjMatrix, 'sparseMatrix'))
-  stopifnot((is.numeric(alpha) && (alpha > 0 && alpha < 1)))
-  if(sum(Matrix::rowSums(adjMatrix)==0)>0) stop("PPI cannot have zero rows/columns")
-  if(sum(Matrix::colSums(adjMatrix)==0)>0) stop("PPI cannot have zero rows/columns")
+  if (method == "netSmooth") {
+    if (is.null(adj)) stop("Please provide the `adj`. \n")
+    stopifnot(is(adj, 'matrix') | is(adj, 'sparseMatrix'))
+    stopifnot((is.numeric(alpha) & (alpha > 0 & alpha < 1)))
+    if(sum(Matrix::rowSums(adj)==0)>0) stop("PPI cannot have zero rows/columns")
+    if(sum(Matrix::colSums(adj)==0)>0) stop("PPI cannot have zero rows/columns")
+  }
   if(is.numeric(alpha)) {
     if(alpha<0 | alpha > 1) {
       stop('alpha must be between 0 and 1')
     }
-    data.projected <- projectAndRecombine(data, adjMatrix, alpha,normalizeAdjMatrix=normalizeAdjMatrix)
+    data.projected <- projectAndRecombine(data, adj, alpha,normalizeAdjMatrix=normalizeAdjMatrix)
   } else stop("unsupported alpha value: ", class(alpha))
-  object@data.project <- data.projected
+  object@data.smooth <- data.projected
   return(object)
 }
 
@@ -1266,4 +1277,51 @@ updateCCC_score <- function(object, net) {
   return(object)
 }
 
+#' Preprocessing multi-omics data and preparing the L-R database
+#'
+#' @param data.list a list consisting of multi-omics data (e.g., RNA & ADT)
+#' @param db one of the CellChatDB databases: CellChatDB.human, CellChatDB.mouse, CellChatDB.zebrafish
+#' @param do.sparse whether to use sparse format
+#' @export
+#'
+preProcMultiomics <- function(data.list, db, do.sparse = TRUE) {
+  # normalize the data
+  data.input.rna <- data.list[[1]]
+  data.input.adt <- data.list[[2]]
+  data.input.rna = data.input.rna/max(data.input.rna)
+  data.input.adt = data.input.adt/max(data.input.adt)
+  data.input.adt.temp = data.input.adt
+  X = data.input.adt
+  for (i in 1:nrow(X)) {
+    data.input.adt.temp[i,] = (X[i,]-min(X[i,]))/(max(X[i,])-min(X[i,]))
+  }
+  data.input.adt[data.input.adt.temp < 0.5] <- 0
+  if (do.sparse) {
+    data.input = rbind(data.input.rna, as(data.input.adt, "dgCMatrix"))
+  } else {
+    data.input = rbind(as.matrix(data.input.rna), as.matrix(data.input.adt))
+  }
 
+  # create a new L-R database
+  proteins <- rownames(data.input.adt)
+  geneInfo.subset <- db$geneInfo[db$geneInfo$AntibodyName %in% proteins, ]
+  proteins.nonmapping <- setdiff(proteins, geneInfo.subset$AntibodyName)
+  if (length(proteins.nonmapping) > 0) {
+    warning(cat("The following antibodies are not found in `CellChatDB$geneInfo$AntibodyName`: ", toString(proteins.nonmapping), "! Please manually add them via the function `updateCellChatDB`. \n"))
+  }
+  out <- extractLRfromGenes(geneSet = geneInfo.subset$Symbol, db)
+  LR.use <- out$LR.use
+  idx <- match(LR.use$ligand, geneInfo.subset$Symbol)
+  LR.use$ligand[!is.na(idx)] <- geneInfo.subset$AntibodyName[idx[!is.na(idx)]]
+  idx <- match(LR.use$receptor, geneInfo.subset$Symbol)
+  LR.use$receptor[!is.na(idx)] <- geneInfo.subset$AntibodyName[idx[!is.na(idx)]]
+
+  db.use <- db
+  db.use$interaction <- LR.use
+  db.use$geneInfo <- dplyr::add_row(db.use$geneInfo, Symbol = geneInfo.subset$AntibodyName)
+
+  return(list(data.input = data.input, db.use = db.use))
+}
+
+
+                    

@@ -1561,7 +1561,7 @@ netVisual_spatial <-function(net, coordinates, meta, sample.use = NULL, color.us
   # }
   # edgelist <- edgelist[-loop_curve,]
 
-  edges <- data.frame(node_coords[edgelist[,1],], node_coords[edgelist[,2],])
+  edges <- data.frame(node_coords[edgelist[,1],,drop =FALSE], node_coords[edgelist[,2],,drop =FALSE])
   colnames(edges) <- c("X1","Y1","X2","Y2")
   node_coords = data.frame(node_coords)
   node_idents = factor(cells.level, levels = cells.level)
@@ -1833,7 +1833,7 @@ netVisual_heatmap <- function(object, comparison = c(1,2), measure = c("count", 
     measure <- match.arg(measure)
   }
   slot.name <- match.arg(slot.name)
-  if (is.list(object@net[[1]])) {
+  if (class(object@net[[1]]) == "list") {
     message("Do heatmap based on a merged object \n")
     if (is.null(color.heatmap)) {
       color.heatmap <- c('#2166ac','#b2182b')
@@ -1858,7 +1858,11 @@ netVisual_heatmap <- function(object, comparison = c(1,2), measure = c("count", 
       color.heatmap <- "Reds"
     }
     if (!is.null(signaling)) {
-      net.diff <- slot(object, slot.name)$prob[,,signaling]
+        prob <- slot(object, slot.name)$prob
+        if (slot.name == "net") {
+          prob[object@net$pval > thresh] <- 0
+        }
+        net.diff <- prob[,,signaling]
       if (is.null(title.name)) {
         title.name = paste0(signaling, " signaling network")
       }
@@ -1930,11 +1934,11 @@ netVisual_heatmap <- function(object, comparison = c(1,2), measure = c("count", 
 
   mat <- net
   if (!is.null(row.show)) {
-    mat <- mat[row.show, ]
+    mat <- mat[row.show, , drop=FALSE]
     color.use.row <- color.use.row[row.show]
   }
   if (!is.null(col.show)) {
-    mat <- mat[ ,col.show]
+    mat <- mat[ ,col.show, drop=FALSE]
     color.use.col <- color.use.col[col.show]
   }
 
@@ -2841,7 +2845,7 @@ netVisual_chord_gene <- function(object, slot.name = "net", color.use = NULL,
                                  thresh = 0.05,
                                  ...){
   if (!is.null(pairLR.use)) {
-    if (!is.data.frame(pairLR.use)) {
+    if (!is.data.frame(pairLR.use) | sum(c("interaction_name","pathway_name") %in% colnames(pairLR.use) == 0)) {
       stop("pairLR.use should be a data frame with a signle column named either 'interaction_name' or 'pathway_name' ")
     } else if ("pathway_name" %in% colnames(pairLR.use)) {
       message("slot.name is set to be 'netP' when pairLR.use contains signaling pathways")
@@ -3047,7 +3051,7 @@ netVisual_chord_gene <- function(object, slot.name = "net", color.use = NULL,
 #' Incoming patterns show how the target cells coordinate with each other as well as how they coordinate with certain signaling pathways to respond to incoming signaling.
 #'
 #' @param object CellChat object
-#' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks
+#' @param slot.name the slot name of object: “netP” or “net”. Use “netP” to analyze cell-cell communication at the level of signaling pathways, and “net” to analyze cell-cell communication at the level of ligand-receptor pairs.
 #' @param pattern "outgoing" or "incoming"
 #' @param cutoff the threshold for filtering out weak links
 #' @param sources.use a vector giving the index or the name of source cell groups of interest
@@ -3396,7 +3400,7 @@ netAnalysis_dot <- function(object, slot.name = "netP", pattern = c("outgoing","
   gg <- gg + scale_y_discrete(limits = rev(levels(data3$CellGroup)))
   gg <- gg + scale_fill_manual(values = ggplot2::alpha(color.use, alpha = dot.alpha), drop = FALSE, na.value = "white")
   gg <- gg + scale_colour_manual(values = color.use, drop = FALSE, na.value = "white")
-  gg <- gg + guides(colour=FALSE) + guides(fill=FALSE)
+  gg <- gg + guides(colour="none") + guides(fill="none")
   gg <- gg + theme(legend.title = element_text(size = 10), legend.text = element_text(size = 8))
   gg
   return(gg)
@@ -4049,10 +4053,14 @@ modify_vlnplot<- function(object,
 
   p <- p + scale_y_continuous(labels = function(x) {
     idx0 = which(x == 0)
-    if (idx0 > 1) {
-      c(rep(x = "", times = idx0-1), "0",rep(x = "", times = length(x) -2-idx0), x[length(x) - 1], "")
+    if (length(idx0) > 0) {
+      if (idx0 > 1) {
+        c(rep(x = "", times = idx0-1), "0",rep(x = "", times = length(x) -2-idx0), x[length(x) - 1], "")
+      } else {
+        c("0", rep(x = "", times = length(x)-3), x[length(x) - 1], "")
+      }
     } else {
-      c("0", rep(x = "", times = length(x)-3), x[length(x) - 1], "")
+      c(as.character(min(x)), rep(x = "", times = length(x)-3), x[length(x) - 1], "")
     }
   })
   #  #c(rep(x = "", times = length(x)-2), x[length(x) - 1], ""))
@@ -4372,7 +4380,7 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
                                do.binary = FALSE, cutoff = NULL, color.use = NULL, alpha = 1,
                                point.size = 0.8, legend.size = 3, legend.text.size = 8, shape.by = 16, ncol = NULL,
                                show.legend = TRUE, show.legend.combined = FALSE){
-  data <- as.matrix(object@data)
+  data <- object@data
   meta <- object@meta
   coords <- object@images$coordinates
   samples <- meta$samples
@@ -4626,7 +4634,3 @@ spatialFeaturePlot <- function(object, features = NULL, signaling = NULL, pairLR
   }
   return(gg)
 }
-
-
-
-

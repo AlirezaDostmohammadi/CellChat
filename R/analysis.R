@@ -186,7 +186,7 @@ netAnalysis_contribution <- function(object, signaling, signaling.name = NULL, s
 #' NB: This function was previously named as `netAnalysis_signalingRole`.  The previous function `netVisual_signalingRole` is now named as `netAnalysis_signalingRole_network`.
 #'
 #' @param object CellChat object; If object = NULL, USER must provide `net`
-#' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks
+#' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks. Setting slot.name = "netP" to compute the network centrality scores at the level of signaling pathways, and setting slot.name = "net" to compute the network centrality scores at the level of ligand-receptor pairs
 #' @param net compute the centrality measures on a specific signaling network given by a 2 or 3 dimemsional array net
 #' @param net.name a character vector giving the name of signaling networks
 #' @param thresh threshold of the p-value for determining significant interaction
@@ -998,7 +998,8 @@ rankSimilarity <- function(object, slot.name = "netP", type = c("functional","st
 #' @param signaling a vector giving the signaling pathway to show
 #' @param pairLR a vector giving the names of L-R pairs to show (e.g, pairLR = c("IL1A_IL1R1_IL1RAP","IL1B_IL1R1_IL1RAP"))
 #' @param signaling.type a char giving the types of signaling from the three categories c("Secreted Signaling", "ECM-Receptor", "Cell-Cell Contact")
-#' @param do.stat whether do a paired Wilcoxon test to determine whether there is significant difference between two datasets. Default = FALSE
+#' @param do.stat whether do a Wilcoxon test to determine whether there is significant difference between two datasets. Default = FALSE
+#' @param paired.test a logical indicating whether you want a paired test. Paired test is applicable to compare two datasets with the same cellular compositions.
 #' @param cutoff.pvalue the cutoff of pvalue when doing Wilcoxon test; Default = 0.05
 #' @param tol a tolerance when considering the relative contribution being equal between two datasets. contribution.relative between 1-tol and 1+tol will be considered as equal contribution
 #' @param thresh threshold of the p-value for determining significant interaction
@@ -1022,7 +1023,7 @@ rankSimilarity <- function(object, slot.name = "netP", type = c("functional","st
 #' @export
 #'
 #' @examples
-rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), mode = c("comparison", "single"), comparison = c(1,2), color.use = NULL, stacked = FALSE, sources.use = NULL, targets.use = NULL,  signaling = NULL, pairLR = NULL, signaling.type = NULL, do.stat = FALSE, cutoff.pvalue = 0.05, tol = 0.05, thresh = 0.05, show.raw = FALSE, return.data = FALSE, x.rotation = 90, title = NULL, bar.w = 0.75, font.size = 8,
+rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), mode = c("comparison", "single"), comparison = c(1,2), color.use = NULL, stacked = FALSE, sources.use = NULL, targets.use = NULL,  signaling = NULL, pairLR = NULL, signaling.type = NULL, do.stat = FALSE, paired.test = TRUE, cutoff.pvalue = 0.05, tol = 0.05, thresh = 0.05, show.raw = FALSE, return.data = FALSE, x.rotation = 90, title = NULL, bar.w = 0.75, font.size = 8,
                     do.flip = TRUE, x.angle = NULL, y.angle = 0, x.hjust = 1,y.hjust = 1,
                     axis.gap = FALSE, ylim = NULL, segments = NULL, tick_width = NULL, rel_heights = c(0.9,0,0.1)) {
   measure <- match.arg(measure)
@@ -1168,7 +1169,7 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
         idx[[i]] <- which(is.infinite(pSum[[i]]) | pSum[[i]] < 0)
         pSum.original.all <- c(pSum.original.all, pSum.original[[i]][idx[[i]]])
       } else if (measure == "count") {
-        pSum[[i]] <- pSum.original[[i]]
+        pSum[[i]] <- pSum.original[[i]] # the prob is already binarized in line 1136
       }
       pair.name[[i]] <- names(pSum.original[[i]])
       object.names.comparison <- c(object.names.comparison, object.names[comparison[i]])
@@ -1273,7 +1274,9 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
     if (do.stat & length(comparison) == 2) {
       for (i in 1:length(pair.name.all)) {
         if (nrow(prob.list[[j]]) != nrow(prob.list[[1]])) {
-          stop("Statistical test is not applicable to datasets with different cellular compositions! Please set `do.stat = FALSE`")
+          if (paired.test) {
+            stop("Paired test is not applicable to datasets with different cellular compositions! Please set `do.stat = FALSE` or `paired.test = FALSE`! \n")
+          }
         }
         prob.values <- matrix(0, nrow = nrow(prob.list[[1]]) * nrow(prob.list[[1]]), ncol = length(comparison))
         for (j in 1:length(comparison)) {
@@ -1285,7 +1288,7 @@ rankNet <- function(object, slot.name = "netP", measure = c("weight","count"), m
         }
         prob.values <- prob.values[rowSums(prob.values, na.rm = TRUE) != 0, , drop = FALSE]
         if (nrow(prob.values) >3 & sum(is.na(prob.values)) == 0) {
-          pvalues <- wilcox.test(prob.values[ ,1], prob.values[ ,2], paired = TRUE)$p.value
+          pvalues <- wilcox.test(prob.values[ ,1], prob.values[ ,2], paired = paired.test)$p.value
         } else {
           pvalues <- 0
         }
@@ -1741,7 +1744,7 @@ extractEnrichedLR <- function(object, signaling, geneLR.return = FALSE, enriched
   net0 <- slot(object, "net")
   for (ii in 1:length(signaling)) {
     signaling.i <- signaling[ii]
-    if (!is.list(net0[[1]])) {
+    if (object@options$mode == "single") {
       net <- net0
       LR <- object@LR
       res <- extractEnrichedLR_internal(net, LR, DB, signaling = signaling.i, enriched.only = enriched.only, thresh = thresh)
@@ -2258,8 +2261,11 @@ netAnalysis_signalingRole_network <- function(object, signaling, slot.name = "ne
     mat <- t(mat)
     rownames(mat) <- names(centr0); colnames(mat) <- names(centr0$outdeg)
     if (!is.null(measure)) {
-      mat <- mat[measure,]
+      mat <- mat[measure,,drop = FALSE]
       if (!is.null(measure.name)) {
+        if (length(measure.name) != length(measure)) {
+          stop("The length of `measure.name` is not the same as that of `measure`! Please modify it! \n")
+        }
         rownames(mat) <- measure.name
       }
     }
@@ -2388,9 +2394,9 @@ netAnalysis_signalingRole_scatter <- function(object, signaling = NULL, color.us
     labs(title = title, x = xlabel, y = ylabel) + theme(plot.title = element_text(size= font.size.title, face="plain"))+
     # theme(axis.text.x = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) +
     theme(axis.line.x = element_line(size = 0.25), axis.line.y = element_line(size = 0.25))
-  gg <- gg + scale_fill_manual(values = ggplot2::alpha(color.use, alpha = dot.alpha), drop = FALSE) + guides(fill=FALSE)
-  gg <- gg + scale_colour_manual(values = color.use, drop = FALSE) + guides(colour=FALSE)
-  # gg <- gg + scale_colour_manual(values = ggplot2::alpha(color.use, alpha = dot.alpha), drop = FALSE) + guides(colour=FALSE)
+  gg <- gg + scale_fill_manual(values = ggplot2::alpha(color.use, alpha = dot.alpha), drop = FALSE) + guides(fill="none")
+  gg <- gg + scale_colour_manual(values = color.use, drop = FALSE) + guides(colour="none")
+  # gg <- gg + scale_colour_manual(values = ggplot2::alpha(color.use, alpha = dot.alpha), drop = FALSE) + guides(colour="none")
   # gg <- gg + scale_shape_manual(values = point.shape[1:length(prob)])
   if (!is.null(group)) {
     gg <- gg + scale_shape_manual(values = point.shape[1:length(unique(df$Group))])
@@ -2560,8 +2566,8 @@ netAnalysis_diff_signalingRole_scatter <- function(object, color.use = NULL, com
     labs(title = title, x = xlabel, y = ylabel) + theme(plot.title = element_text(size= font.size.title, face="plain", hjust = 0.5))+
     # theme(axis.text.x = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) +
     theme(axis.line.x = element_line(size = 0.25), axis.line.y = element_line(size = 0.25))
-  gg <- gg + scale_fill_manual(values = ggplot2::alpha(color.use, alpha = dot.alpha), drop = FALSE) + guides(fill=FALSE)
-  gg <- gg + scale_colour_manual(values = color.use, drop = FALSE) + guides(colour=FALSE)
+  gg <- gg + scale_fill_manual(values = ggplot2::alpha(color.use, alpha = dot.alpha), drop = FALSE) + guides(fill="none")
+  gg <- gg + scale_colour_manual(values = color.use, drop = FALSE) + guides(colour="none")
   if (!is.null(group)) {
     gg <- gg + scale_shape_manual(values = point.shape[1:length(unique(df$Group))])
   }
@@ -2785,8 +2791,8 @@ netAnalysis_signalingChanges_scatter <- function(object, idents.use, color.use =
 #'
 #' @param object CellChat object
 #' @param signaling a character vector giving the names of signaling networks of interest
-#' @param pattern "outgoing", "incoming" or "all". When pattern = "all", it aggregates the outgoing and incoming signaling strength together
-#' @param slot.name the slot name of object that is used to compute centrality measures of signaling networks
+#' @param pattern this parameter can be set as "outgoing", "incoming" or "all". When pattern = "all", CellChat aggregates the outgoing and incoming signaling strength together;
+#' @param slot.name the slot name of object that is used to examine the signaling patterns at the level of signaling pathways (slot.name = "netP") or ligand-receptor pairs (slot.name = "net");
 #' @param color.use the character vector defining the color of each cell group
 #' @param color.heatmap a color name in brewer.pal
 #' @param title title name
